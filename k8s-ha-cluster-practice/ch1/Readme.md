@@ -6,14 +6,19 @@
 ## Vagrant 介绍
 
 ### 什么是 Vagrant？
+![](images/1.png)
 
 [Vagrant](https://developer.hashicorp.com/vagrant/tutorials/getting-started?product_intent=vagrant "vagrant") 是一款由 HashiCorp 开发的开源工具，用于构建和管理虚拟化开发环境。它通过简单的配置文件（Vagrantfile）来定义虚拟机的配置，并支持多种虚拟化提供商（如 VirtualBox、VMware、Hyper-V 等）。Vagrant 的主要目标是让开发环境的搭建和共享变得简单、可重复。
 
 ### Box 概念
 
+![](images/2.png)
+
 在 Vagrant 中，**Box** 是一个预配置的虚拟机镜像，类似于 Docker 中的镜像。Box 包含了操作系统和预安装的软件，用户可以通过 Box 快速启动一个虚拟机。Vagrant 官方提供了许多常用的 Box，用户也可以自定义 Box 或从第三方获取。
 
 ### Vagrantfile 的用途
+
+![](images/3.png)
 
 **Vagrantfile** 是 Vagrant 的核心配置文件，使用 Ruby 语法编写。它定义了虚拟机的配置信息，包括虚拟机的数量、网络设置、共享文件夹、Provisioning 脚本等。通过 Vagrantfile，用户可以轻松地复制和共享开发环境。
 
@@ -302,6 +307,8 @@ vagrant destroy
 ```
 
 ## 总结
+
+![](images/4.png)
 
 通过 Vagrant 和 VirtualBox，我们可以快速在本地搭建一个多节点的虚拟机集群。这种方式成本低、易于管理，非常适合本地开发和测试。如果你有公有云资源或物理服务器，可以直接跳过此步骤。接下来，我们将在这个集群上继续安装和配置 Kubernetes，探索容器编排的更多功能。请保持关注，以获得最新内容。
 
