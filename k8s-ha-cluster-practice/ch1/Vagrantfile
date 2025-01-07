@@ -1,0 +1,73 @@
+# 定义虚拟机配置
+VMs = [
+  {
+    :name => "master1",
+    :ip => "192.168.33.11",
+    :hostname => "master1",
+    :password => "brains"
+  },
+  {
+    :name => "master2",
+    :ip => "192.168.33.12",
+    :hostname => "master2",
+    :password => "brains"
+  },
+  {
+    :name => "master3",
+    :ip => "192.168.33.13",
+    :hostname => "master3",
+    :password => "brains"
+  },
+  {
+    :name => "node1",
+    :ip => "192.168.33.14",
+    :hostname => "node1",
+    :password => "brains"
+  }
+]
+
+
+Vagrant.configure("2") do |config|
+  # 循环创建虚拟机
+  VMs.each do |vm|
+    config.vm.define vm[:name] do |node|
+      node.vm.box = "ubuntu22.04"
+
+      # 配置虚拟机的网络
+      node.vm.network "private_network", ip: vm[:ip]
+
+      # 配置虚拟机的提供者 (VirtualBox)
+      node.vm.provider "virtualbox" do |vb|
+        # 自定义虚拟机的名称
+        vb.name = vm[:name]
+        # 分配的内存大小 (MB)
+        vb.memory = "2048"
+        # 分配的 CPU 核心数
+        vb.cpus = 2
+      end
+
+      # 配置虚拟机的 provision (可选)
+      config.vm.provision "shell", inline: <<-SHELL
+        # 设置 root 密码
+        echo "root:#{vm[:password]}" | chpasswd
+
+        # 允许 root 远程登录
+        sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+        sed -i 's/#PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+        # 更新 /etc/ssh/sshd_config.d/60-cloudimg-settings.conf 文件
+        sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config.d/60-cloudimg-settings.conf
+
+
+        # 重启 SSH 服务以应用更改
+        systemctl restart sshd
+      SHELL
+
+      # 配置虚拟机的 hostname (可选)
+      node.vm.hostname = vm[:hostname]
+
+      # 配置虚拟机的 post-up 消息 (可选)
+      config.vm.post_up_message = "#{vm[:name]} 虚拟机已启动！IP 地址：#{vm[:ip]}"
+    end
+  end  
+end
