@@ -305,6 +305,6 @@ vagrant destroy
 
 通过 Vagrant 和 VirtualBox，我们可以快速在本地搭建一个多节点的虚拟机集群。这种方式成本低、易于管理，非常适合本地开发和测试。如果你有公有云资源或物理服务器，可以直接跳过此步骤。接下来，我们将在这个集群上继续安装和配置 Kubernetes，探索容器编排的更多功能。请保持关注，以获得最新内容。
 
-
+过程中所有脚本、代码可通过[仓库](https://github.com/yyong-brs/LeDaDa-CloudNative-Camp/tree/master/k8s-ha-cluster-practice/ch1 "乐大大训练营仓库")获取
 
 **如果这篇文章帮助到你，你能给它一个 👏 并考虑关注我以获取更多技巧和窍门，我将非常感激。你的支持对我来说意义重大！**
