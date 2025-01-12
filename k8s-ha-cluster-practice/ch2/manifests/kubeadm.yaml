@@ -1,0 +1,67 @@
+apiVersion: kubeadm.k8s.io/v1beta4
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: abcdef.0123456789abcdef
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
+kind: InitConfiguration
+localAPIEndpoint:
+  # 修改成当前执行操作的 master ip
+  advertiseAddress: 192.168.33.11
+  bindPort: 6443
+nodeRegistration:
+  # 修改成 cri-dockerd 的 sock
+  criSocket: unix:///run/cri-dockerd.sock
+  imagePullPolicy: IfNotPresent
+  imagePullSerial: true
+  # 修改成当前 master 的主机名
+  name: master1
+  taints: null
+timeouts:
+  controlPlaneComponentHealthCheck: 4m0s
+  discovery: 5m0s
+  etcdAPICall: 2m0s
+  kubeletHealthCheck: 4m0s
+  kubernetesAPICall: 1m0s
+  tlsBootstrap: 5m0s
+  upgradeManifests: 5m0s
+---
+apiServer: {}
+apiVersion: kubeadm.k8s.io/v1beta4
+caCertificateValidityPeriod: 87600h0m0s
+certificateValidityPeriod: 8760h0m0s
+certificatesDir: /etc/kubernetes/pki
+clusterName: kubernetes
+controllerManager: {}
+dns: {}
+encryptionAlgorithm: RSA-2048
+etcd:
+  local:
+    # 按需修改 etcd 的数据目录
+    dataDir: /data/etcd
+# 修改镜像加速地址
+imageRepository: registry.aliyuncs.com/google_containers
+kind: ClusterConfiguration
+# 修改成具体对应的版本号
+kubernetesVersion: 1.32.0
+# 如果是多master节点，就需要添加这项，指向第一步设定的 vip 的hosts
+controlPlaneEndpoint: "lb.k8s.local:6443"
+networking:
+  dnsDomain: cluster.local
+  serviceSubnet: 10.96.0.0/12
+  # 添加pod的IP地址设置（按需调整）
+  podSubnet: 10.244.0.0/16
+proxy: {}
+scheduler: {}
+# 在最后添加上下面两部分
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+mode: ipvs
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
