@@ -1,12 +1,15 @@
-# k8s master 节点安装
+# Kubernetes 1.32 + Kube-Vip：高可用集群部署全攻略
 
 ## 概述
+Kubernetes（简称 K8S）是一个开源的容器编排平台，用于自动化部署、扩展和管理容器化应用。Kubernetes 集群通常由 Master 节点和 Worker 节点组成。Master 节点负责集群的管理和控制，包括调度、监控、维护集群状态等；而 Worker 节点则负责运行容器化应用。
 
-说明 k8s 大致架构，以及 master worker 的区别，说明本文着重实践 k8s master 节点的安装过程，同时说明基础的虚拟机集群可参考上一篇文章。
+本文将重点介绍如何在 Kubernetes 1.32 版本中，通过 Kube-Vip 实现 Master 节点的高可用配置。Kube-Vip 是一个轻量级的工具，能够为 Kubernetes 集群提供虚拟 IP 和负载均衡功能，确保在 Master 节点故障时，集群仍能正常运行。
+
+本文的实践基于 4 台虚拟主机，其中 3 台作为 Master 节点，1 台作为 Worker 节点。我们将详细讲解从系统初始化到集群部署的完整过程。如果你对基础的虚拟机集群搭建不熟悉，可以参考上一篇文章：[高可用K8S集群搭建指南（一） : Vagrant 多节点虚拟机集群搭建](https://mp.weixin.qq.com/s/uqbpcEovKLZ61Deq_9qQGw)。
 
 ## 环境信息
 
-说明基于上一篇文章的 3+1 4 节点集群规划方案，配置信息列出、操作系统版本等。计划安装的 k8s 版本。
+基于前面安装的 4 台虚拟主机清单及本文计划安装组件信息如下：
 
 | 主机名      | 配置 | 角色 | 系统版本 |IP |安装的组件 |
 | ----------- | ----------- | ----------- |----------- |----------- |----------- |
@@ -15,8 +18,8 @@
 | master3      | 2C2G40G       | master |ubuntu22.04 |192.168.33.13 |kube-vip、apiserver、controller-manager、scheduler、kubelet、etcd、kube-proxy、容器运行时、calico |
 | node1      | 2C2G40G       | worker |ubuntu22.04 |192.168.33.14 |kubelet、kube-proxy、容器运行时、calico、coredns |
 
-上图 + 参考之前的 vip 文章
-https://blog.csdn.net/networken/article/details/132594119
+简约的架构图如下：
+![](images/topology.png)
 
 
 > [kube-vip](https://kube-vip.io/docs/ "kube-vip") 为 Kubernetes 集群提供虚拟 IP 和负载均衡器，用于控制平面（用于构建高可用集群）并支持 Kubernetes LoadBalancer 类型 Services ，无需依赖任何外部硬件或软件。当然你也可以选择 keepalived+haproxy 方式，我选择部署比较方便的 kube-vip。
@@ -24,8 +27,6 @@ https://blog.csdn.net/networken/article/details/132594119
 
 
 ## 安装
-
-说明性信息
 
 ### 步骤1：系统初始化配置
 
@@ -318,7 +319,8 @@ https://blog.csdn.net/networken/article/details/132594119
 
 - 生成初始化配置文件：
   ```shell
-  $ kubeadm config print init-defaults > kubeadm.yaml
+  $ kubeadm config print init-defaults --component-configs KubeProxyConfiguration > kubeadm.yaml
+
   ```
 
 - 修改上一步生成的`kubeadm.yaml`配置文件：
@@ -334,7 +336,7 @@ https://blog.csdn.net/networken/article/details/132594119
     - authentication
   kind: InitConfiguration
   localAPIEndpoint:
-    # 修改成当前执行操作的 master ip
+    # 修改为 master1 ip
     advertiseAddress: 192.168.33.11
     bindPort: 6443
   nodeRegistration:
@@ -342,7 +344,7 @@ https://blog.csdn.net/networken/article/details/132594119
     criSocket: unix:///run/cri-dockerd.sock
     imagePullPolicy: IfNotPresent
     imagePullSerial: true
-    # 修改成当前 master 的主机名
+    # 修改为 master1 主机名
     name: master1
     taints: null
   timeouts:
@@ -354,7 +356,22 @@ https://blog.csdn.net/networken/article/details/132594119
     tlsBootstrap: 5m0s
     upgradeManifests: 5m0s
   ---
-  apiServer: {}
+  apiServer: 
+    # 添加如下参数
+    timeoutForControlPlane: 4m0s
+    certSANs:
+    # vip 以及主机 hosts ip
+    - lb.k8s.local
+    - master1
+    - master2
+    - master3
+    - node1
+    - 192.168.33.11
+    - 192.168.33.12
+    - 192.168.33.13
+    - 192.168.33.14
+  # 如果是多master节点，就需要添加这项，指向第一步设定的 vip 的hosts
+  controlPlaneEndpoint: "lb.k8s.local:6443"
   apiVersion: kubeadm.k8s.io/v1beta4
   caCertificateValidityPeriod: 87600h0m0s
   certificateValidityPeriod: 8760h0m0s
@@ -365,15 +382,12 @@ https://blog.csdn.net/networken/article/details/132594119
   encryptionAlgorithm: RSA-2048
   etcd:
     local:
-      # 按需修改 etcd 的数据目录
+      # 按需调整 etcd 数据目录
       dataDir: /data/etcd
   # 修改镜像加速地址
   imageRepository: registry.aliyuncs.com/google_containers
   kind: ClusterConfiguration
-  # 修改成具体对应的版本号
   kubernetesVersion: 1.32.0
-  # 如果是多master节点，就需要添加这项，指向第一步设定的 vip 的hosts
-  controlPlaneEndpoint: "lb.k8s.local:6443"
   networking:
     dnsDomain: cluster.local
     serviceSubnet: 10.96.0.0/12
@@ -381,12 +395,77 @@ https://blog.csdn.net/networken/article/details/132594119
     podSubnet: 10.244.0.0/16
   proxy: {}
   scheduler: {}
-  # 在最后添加上下面两部分
   ---
   apiVersion: kubeproxy.config.k8s.io/v1alpha1
+  bindAddress: 0.0.0.0
+  bindAddressHardFail: false
+  clientConnection:
+    acceptContentTypes: ""
+    burst: 0
+    contentType: ""
+    kubeconfig: /var/lib/kube-proxy/kubeconfig.conf
+    qps: 0
+  clusterCIDR: ""
+  configSyncPeriod: 0s
+  conntrack:
+    maxPerCore: null
+    min: null
+    tcpBeLiberal: false
+    tcpCloseWaitTimeout: null
+    tcpEstablishedTimeout: null
+    udpStreamTimeout: 0s
+    udpTimeout: 0s
+  detectLocal:
+    bridgeInterface: ""
+    interfaceNamePrefix: ""
+  detectLocalMode: ""
+  enableProfiling: false
+  healthzBindAddress: ""
+  hostnameOverride: ""
+  iptables:
+    localhostNodePorts: null
+    masqueradeAll: false
+    masqueradeBit: null
+    minSyncPeriod: 0s
+    syncPeriod: 0s
+  ipvs:
+    excludeCIDRs: null
+    minSyncPeriod: 0s
+    scheduler: ""
+    strictARP: false
+    syncPeriod: 0s
+    tcpFinTimeout: 0s
+    tcpTimeout: 0s
+    udpTimeout: 0s
   kind: KubeProxyConfiguration
-  mode: ipvs
+  logging:
+    flushFrequency: 0
+    options:
+      json:
+        infoBufferSize: "0"
+      text:
+        infoBufferSize: "0"
+    verbosity: 0
+  metricsBindAddress: ""
+  # 修改为 ipvs
+  mode: "ipvs"
+  nftables:
+    masqueradeAll: false
+    masqueradeBit: null
+    minSyncPeriod: 0s
+    syncPeriod: 0s
+  nodePortAddresses: null
+  oomScoreAdj: null
+  portRange: ""
+  showHiddenMetricsForVersion: ""
+  winkernel:
+    enableDSR: false
+    forwardHealthCheckVip: false
+    networkName: ""
+    rootHnsEndpointName: ""
+    sourceVip: ""
   ---
+  # 在最后添加
   apiVersion: kubelet.config.k8s.io/v1beta1
   kind: KubeletConfiguration
   cgroupDriver: systemd
@@ -394,21 +473,22 @@ https://blog.csdn.net/networken/article/details/132594119
 
 - 基于上一步修改完成的 `kubeadm.yaml`文件，执行集群初始化：
   ```shell
-  $ kubeadm init --config=kubeadm.yaml
+  $ kubeadm init --upload-certs --config=kubeadm.yaml
   ```
 - 等待出现类似以下的输出，代表初始化成功：
   ```shell
-  root@master1:~# kubeadm init --config=kubeadm.yaml
+  root@master1:~# kubeadm init --upload-certs --config=kubeadm.yaml
+  W0113 07:54:18.346337    7482 initconfiguration.go:332] error unmarshaling configuration schema.GroupVersionKind{Group:"kubeadm.k8s.io", Version:"v1beta4", Kind:"ClusterConfiguration"}: strict decoding error: unknown field "apiServer.timeoutForControlPlane"
   [init] Using Kubernetes version: v1.32.0
   [preflight] Running pre-flight checks
   [preflight] Pulling images required for setting up a Kubernetes cluster
   [preflight] This might take a minute or two, depending on the speed of your internet connection
   [preflight] You can also perform this action beforehand using 'kubeadm config images pull'
-  W0111 15:02:22.808751    2723 checks.go:846] detected that the sandbox image "registry.aliyuncs.com/google_containers/pause" of the container runtime is inconsistent with that used by kubeadm.It is recommended to use "registry.aliyuncs.com/google_containers/pause:3.10" as the CRI sandbox image.
+  W0113 07:54:18.528435    7482 checks.go:846] detected that the sandbox image "registry.aliyuncs.com/google_containers/pause" of the container runtime is inconsistent with that used by kubeadm.It is recommended to use "registry.aliyuncs.com/google_containers/pause:3.10" as the CRI sandbox image.
   [certs] Using certificateDir folder "/etc/kubernetes/pki"
   [certs] Generating "ca" certificate and key
   [certs] Generating "apiserver" certificate and key
-  [certs] apiserver serving cert is signed for DNS names [kubernetes kubernetes.default kubernetes.default.svc kubernetes.default.svc.cluster.local lb.k8s.local master1] and IPs [10.96.0.1 192.168.33.11]
+  [certs] apiserver serving cert is signed for DNS names [kubernetes kubernetes.default kubernetes.default.svc kubernetes.default.svc.cluster.local lb.k8s.local master1 master2 master3 node1] and IPs [10.96.0.1 192.168.33.11 192.168.33.12 192.168.33.13 192.168.33.14]
   [certs] Generating "apiserver-kubelet-client" certificate and key
   [certs] Generating "front-proxy-ca" certificate and key
   [certs] Generating "front-proxy-client" certificate and key
@@ -436,12 +516,14 @@ https://blog.csdn.net/networken/article/details/132594119
   [kubelet-start] Starting the kubelet
   [wait-control-plane] Waiting for the kubelet to boot up the control plane as static Pods from directory "/etc/kubernetes/manifests"
   [kubelet-check] Waiting for a healthy kubelet at http://127.0.0.1:10248/healthz. This can take up to 4m0s
-  [kubelet-check] The kubelet is healthy after 1.003468522s
+  [kubelet-check] The kubelet is healthy after 505.620541ms
   [api-check] Waiting for a healthy API server. This can take up to 4m0s
-  [api-check] The API server is healthy after 12.126753636s
+  [api-check] The API server is healthy after 9.50204379s
   [upload-config] Storing the configuration used in ConfigMap "kubeadm-config" in the "kube-system" Namespace
   [kubelet] Creating a ConfigMap "kubelet-config" in namespace kube-system with the configuration for the kubelets in the cluster
-  [upload-certs] Skipping phase. Please see --upload-certs
+  [upload-certs] Storing the certificates in Secret "kubeadm-certs" in the "kube-system" Namespace
+  [upload-certs] Using certificate key:
+  38e97e7c5860dda6b9c27093e9c1f96caf3f61cc9e93ca0faa517a49d592b096
   [mark-control-plane] Marking the node master1 as control-plane by adding the labels: [node-role.kubernetes.io/control-plane node.kubernetes.io/exclude-from-external-load-balancers]
   [mark-control-plane] Marking the node master1 as control-plane by adding the taints [node-role.kubernetes.io/control-plane:NoSchedule]
   [bootstrap-token] Using token: abcdef.0123456789abcdef
@@ -471,17 +553,20 @@ https://blog.csdn.net/networken/article/details/132594119
   Run "kubectl apply -f [podnetwork].yaml" with one of the options listed at:
     https://kubernetes.io/docs/concepts/cluster-administration/addons/
 
-  You can now join any number of control-plane nodes by copying certificate authorities
-  and service account keys on each node and then running the following as root:
+  You can now join any number of control-plane nodes running the following command on each as root:
 
     kubeadm join lb.k8s.local:6443 --token abcdef.0123456789abcdef \
-          --discovery-token-ca-cert-hash sha256:f3b88b3b85946768087b3642a373ec891bb1da2fc79cf13b82ce4a9b1b13db14 \
-          --control-plane 
+          --discovery-token-ca-cert-hash sha256:0153935bdcd1228663ed02045d6c480b1457319f942a8f01ff5765650f226b2d \
+          --control-plane --certificate-key 38e97e7c5860dda6b9c27093e9c1f96caf3f61cc9e93ca0faa517a49d592b096
+
+  Please note that the certificate-key gives access to cluster sensitive data, keep it secret!
+  As a safeguard, uploaded-certs will be deleted in two hours; If necessary, you can use
+  "kubeadm init phase upload-certs --upload-certs" to reload certs afterward.
 
   Then you can join any number of worker nodes by running the following on each as root:
 
   kubeadm join lb.k8s.local:6443 --token abcdef.0123456789abcdef \
-          --discovery-token-ca-cert-hash sha256:f3b88b3b85946768087b3642a373ec891bb1da2fc79cf13b82ce4a9b1b13db14 
+          --discovery-token-ca-cert-hash sha256:0153935bdcd1228663ed02045d6c480b1457319f942a8f01ff5765650f226b2d
   ```
   **注：** 最后的两个关键的输出，分别指出了新的 master 以及 worker 节点加入集群的命令。
 - 按照以上输出，创建配置文件目录并复制配置文件：
@@ -614,27 +699,153 @@ https://blog.csdn.net/networken/article/details/132594119
   master1   Ready    control-plane   66m   v1.32.0
   ```
 
+### 步骤8：加入其它 Master 节点
+
+> 说明：以下操作分别在第 2 个及第 3 个 master 节点执行即可。
+
+- master 加入集群：
+
+  ```shell
+  $ kubeadm join lb.k8s.local:6443 --token abcdef.0123456789abcdef \
+        --discovery-token-ca-cert-hash sha256:0153935bdcd1228663ed02045d6c480b1457319f942a8f01ff5765650f226b2d \
+        --control-plane --certificate-key 38e97e7c5860dda6b9c27093e9c1f96caf3f61cc9e93ca0faa517a49d592b096 --cri-socket unix:///run/cri-dockerd.sock --apiserver-advertise-address 192.168.33.12
+  ```
+  - 如果初始化后未记录节点加入命令，可以通过运行以下命令重新生成：`kubeadm token create --print-join-command --ttl 0`。
+  - `--control-plane` 用于指定作为控制平面加入集群。
+  - `--cri-socket unix:///run/cri-dockerd.sock` 基于 docker 容器运行时，一定要加上此垫片 socket 参数。
+  - `--apiserver-advertise-address` 此参数用于识别当前节点加入集群是识别的ip，一定要指定，要不然会使用默认的 vagrant 的 第一块卡 ip，导致其它节点无法通信，一定要指定加入的 master 节点实际可通信的 ip。
+  - 若 join 失败，可执行 `kubeadm reset --cri-socket unix:///run/cri-dockerd.sock` 进行清理。
 
 
+### 步骤9：加入 Worker 节点
+> 说明：以下操作在 node1 节点执行即可。(如果有多个worker 节点分别执行即可)。
+
+- worker 加入集群：
+
+  ```shell
+  $ kubeadm join lb.k8s.local:6443 --token abcdef.0123456789abcdef \
+        --discovery-token-ca-cert-hash sha256:0153935bdcd1228663ed02045d6c480b1457319f942a8f01ff5765650f226b2d --cri-socket unix:///run/cri-dockerd.sock
+  ```
+  - 如果初始化后未记录节点加入命令，可以通过运行以下命令重新生成：`kubeadm token create --print-join-command --ttl 0`。
+  - `--cri-socket unix:///run/cri-dockerd.sock` 基于 docker 容器运行时，一定要加上此垫片 socket 参数。
+  - 若 join 失败，可执行 `kubeadm reset --cri-socket unix:///run/cri-dockerd.sock` 进行清理。
+
+### 步骤10：验证集群功能
+
+- 查看所有节点状态：
+
+  ```shell
+  root@master1:~# kubectl get node -o wide 
+  NAME      STATUS   ROLES           AGE     VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION       CONTAINER-RUNTIME
+  master1   Ready    control-plane   37m     v1.32.0   192.168.33.11   <none>        Ubuntu 22.04.5 LTS   5.15.0-130-generic   docker://27.4.1
+  master2   Ready    control-plane   12m     v1.32.0   192.168.33.12   <none>        Ubuntu 22.04.5 LTS   5.15.0-130-generic   docker://27.4.1
+  master3   Ready    control-plane   12m     v1.32.0   192.168.33.13   <none>        Ubuntu 22.04.5 LTS   5.15.0-130-generic   docker://27.4.1
+  node1     Ready    <none>          4m22s   v1.32.0   192.168.33.14   <none>        Ubuntu 22.04.5 LTS   5.15.0-130-generic   docker://27.4.1
+  ```
+
+- 最终运行的 Pods 清单：
+
+  ```shell
+  root@master1:~# kubectl get pods -A -o wide
+  NAMESPACE     NAME                                       READY   STATUS    RESTARTS   AGE    IP              NODE      NOMINATED NODE   READINESS GATES
+  kube-system   calico-kube-controllers-74dfd97c55-cv98z   1/1     Running   0          35m    10.244.137.66   master1   <none>           <none>
+  kube-system   calico-node-5b5pq                          1/1     Running   0          13m    192.168.33.12   master2   <none>           <none>
+  kube-system   calico-node-7pfd5                          1/1     Running   0          35m    192.168.33.11   master1   <none>           <none>
+  kube-system   calico-node-dbr49                          1/1     Running   0          13m    192.168.33.13   master3   <none>           <none>
+  kube-system   calico-node-plvh6                          1/1     Running   0          5m4s   192.168.33.14   node1     <none>           <none>
+  kube-system   coredns-6766b7b6bb-gr28c                   1/1     Running   0          37m    10.244.137.65   master1   <none>           <none>
+  kube-system   coredns-6766b7b6bb-s6gcl                   1/1     Running   0          37m    10.244.137.67   master1   <none>           <none>
+  kube-system   etcd-master1                               1/1     Running   0          37m    192.168.33.11   master1   <none>           <none>
+  kube-system   etcd-master2                               1/1     Running   0          13m    192.168.33.12   master2   <none>           <none>
+  kube-system   etcd-master3                               1/1     Running   0          12m    192.168.33.13   master3   <none>           <none>
+  kube-system   kube-apiserver-master1                     1/1     Running   0          37m    192.168.33.11   master1   <none>           <none>
+  kube-system   kube-apiserver-master2                     1/1     Running   0          13m    192.168.33.12   master2   <none>           <none>
+  kube-system   kube-apiserver-master3                     1/1     Running   0          12m    192.168.33.13   master3   <none>           <none>
+  kube-system   kube-controller-manager-master1            1/1     Running   0          37m    192.168.33.11   master1   <none>           <none>
+  kube-system   kube-controller-manager-master2            1/1     Running   0          13m    192.168.33.12   master2   <none>           <none>
+  kube-system   kube-controller-manager-master3            1/1     Running   0          12m    192.168.33.13   master3   <none>           <none>
+  kube-system   kube-proxy-c2xbq                           1/1     Running   0          13m    192.168.33.13   master3   <none>           <none>
+  kube-system   kube-proxy-g2k92                           1/1     Running   0          5m4s   192.168.33.14   node1     <none>           <none>
+  kube-system   kube-proxy-kcsd5                           1/1     Running   0          37m    192.168.33.11   master1   <none>           <none>
+  kube-system   kube-proxy-ndlmm                           1/1     Running   0          13m    192.168.33.12   master2   <none>           <none>
+  kube-system   kube-scheduler-master1                     1/1     Running   0          37m    192.168.33.11   master1   <none>           <none>
+  kube-system   kube-scheduler-master2                     1/1     Running   0          13m    192.168.33.12   master2   <none>           <none>
+  kube-system   kube-scheduler-master3                     1/1     Running   0          12m    192.168.33.13   master3   <none>           <none>
+  kube-system   kube-vip-master1                           1/1     Running   0          37m    192.168.33.11   master1   <none>           <none>
+  kube-system   kube-vip-master2                           1/1     Running   0          13m    192.168.33.12   master2   <none>           <none>
+  kube-system   kube-vip-master3                           1/1     Running   0          12m    192.168.33.13   master3   <none>           <none>
+
+  ```
+
+- 验证集群网络是否正常：
+
+  ```shell
+  root@master1:~# kubectl run busybox --image registry.cn-shanghai.aliyuncs.com/yydd/busybox:1.28 --restart=Never --rm -it busybox -- sh
+  If you don't see a command prompt, try pressing enter.
+  / # nslookup kubernetes.default.svc.cluster.local
+  Server:    10.96.0.10
+  Address 1: 10.96.0.10 kube-dns.kube-system.svc.cluster.local
+
+  Name:      kubernetes.default.svc.cluster.local
+  Address 1: 10.96.0.1 kubernetes.default.svc.cluster.local
+  / # 
+  ```
+  - `10.96.0.10` 就是我们的 coreDNS 的 clusterIP，说明 coreDNS 配置好了。解析内部 Service 的名称，是通过 coreDNS 去解析的。
 
 
+### 步骤11：验证集群高可用
 
-https://blog.csdn.net/networken/article/details/132594119
+- 关闭 master1 节点：
+
+  ```shell
+  $ vagrant halt master1
+  ```
+  **注**：我是基于 vagrant 启动的虚拟机，你可以执行 `shutdown -h now`。
+
+- 查看 vip 地址自动转移到 master2 节点：
+
+  ```shell
+  root@master2:~# ip a|grep enp
+  2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+      inet 10.0.2.15/24 metric 100 brd 10.0.2.255 scope global dynamic enp0s3
+  3: enp0s8: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+      inet 192.168.33.12/24 brd 192.168.33.255 scope global enp0s8
+      inet 192.168.33.250/32 scope global enp0s8
+
+  ```
+- 在 master2 节点依然能够正常访问集群：
+
+  ```shell
+  root@master2:~# kubectl get node
+  NAME      STATUS     ROLES           AGE    VERSION
+  master1   NotReady   control-plane   170m   v1.32.0
+  master2   Ready      control-plane   146m   v1.32.0
+  master3   Ready      control-plane   145m   v1.32.0
+  node1     Ready      <none>          137m   v1.32.0
+  ```
+
+**至此，基于 Kube-Vip 的高可用集群部署完成。**
+
+## 其它参考信息
+
+- 若安装过程中，你想快照虚拟机，以备后续还原后快速重试，可以通过以下命令（基于 vagrant 创建的机器可用）：
+  ```shell
+  # 创建机器快照
+  $ vagrant snapshot save [机器名] <snapshot_name>
+  # 查看机器快照清单
+  vagrant snapshot list [机器名]
+  # 还原机器快照
+  vagrant snapshot restore [机器名] <snapshot_name>
+  # 删除机器快照
+  vagrant snapshot delete [机器名] <snapshot_name>
+  ```
+- 本节相关安装介质及信息可通过 [github](https://github.com/yyong-brs/LeDaDa-CloudNative-Camp/tree/master/k8s-ha-cluster-practice/ch2 "GitHub 仓库") / [gitee](https://gitee.com/yuedada/LeDaDa-CloudNative-Camp/tree/master/k8s-ha-cluster-practice/ch2 "Gitee 仓库") 仓库进行查看。
 
 
-- 让我们来测试集群网络是否正常：
-https://www.cnblogs.com/guangdelw/p/18222715
+## 总结
 
-提醒 git /gitee 查看相关清单或程序包等
-## 其它
+通过本文的实践，我们成功部署了一个基于 Kube-Vip 的高可用 Kubernetes 集群。Kube-Vip 提供了虚拟 IP 和负载均衡功能，确保了在 Master 节点故障时，集群仍能正常运行。本文详细介绍了从系统初始化、Docker 安装、Kubernetes 组件安装到集群初始化的完整步骤，并验证了集群的高可用性。
 
-```shell
-vagrant snapshot save [机器名] <snapshot_name>
+在实际生产环境中，高可用性是 Kubernetes 集群的关键特性之一。通过 Kube-Vip，我们可以避免单点故障，确保集群的稳定性和可靠性。此外，本文还提供了 Calico 网络插件的安装和配置，确保集群的网络通信正常。
 
-vagrant snapshot list [机器名]
-
-vagrant snapshot restore [机器名] <snapshot_name>
-
-vagrant snapshot delete [机器名] <snapshot_name>
-```
-
+如果你在部署过程中遇到问题，可以参考本文提供的 GitHub 和 Gitee 仓库中的相关资源，或者通过快照功能快速回滚到之前的步骤。希望本文能帮助你顺利完成 Kubernetes 高可用集群的部署。
