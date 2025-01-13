@@ -41,9 +41,9 @@ Vagrant.configure("2") do |config|
         # 自定义虚拟机的名称
         vb.name = vm[:name]
         # 分配的内存大小 (MB)
-        vb.memory = "2048"
+        vb.memory = "3072"
         # 分配的 CPU 核心数
-        vb.cpus = 2
+        vb.cpus = 3
       end
 
       # 配置虚拟机的 provision (可选)

@@ -9,7 +9,7 @@ bootstrapTokens:
   - authentication
 kind: InitConfiguration
 localAPIEndpoint:
-  # 修改成当前执行操作的 master ip
+  # 修改为 master1 ip
   advertiseAddress: 192.168.33.11
   bindPort: 6443
 nodeRegistration:
@@ -17,7 +17,7 @@ nodeRegistration:
   criSocket: unix:///run/cri-dockerd.sock
   imagePullPolicy: IfNotPresent
   imagePullSerial: true
-  # 修改成当前 master 的主机名
+  # 修改为 master1 主机名
   name: master1
   taints: null
 timeouts:
@@ -29,7 +29,22 @@ timeouts:
   tlsBootstrap: 5m0s
   upgradeManifests: 5m0s
 ---
-apiServer: {}
+apiServer: 
+  # 添加如下参数
+  timeoutForControlPlane: 4m0s
+  certSANs:
+  # vip 以及主机 hosts ip
+  - lb.k8s.local
+  - master1
+  - master2
+  - master3
+  - node1
+  - 192.168.33.11
+  - 192.168.33.12
+  - 192.168.33.13
+  - 192.168.33.14
+# 如果是多master节点，就需要添加这项，指向第一步设定的 vip 的hosts
+controlPlaneEndpoint: "lb.k8s.local:6443"
 apiVersion: kubeadm.k8s.io/v1beta4
 caCertificateValidityPeriod: 87600h0m0s
 certificateValidityPeriod: 8760h0m0s
@@ -40,15 +55,12 @@ dns: {}
 encryptionAlgorithm: RSA-2048
 etcd:
   local:
-    # 按需修改 etcd 的数据目录
+    # 按需调整 etcd 数据目录
     dataDir: /data/etcd
 # 修改镜像加速地址
 imageRepository: registry.aliyuncs.com/google_containers
 kind: ClusterConfiguration
-# 修改成具体对应的版本号
 kubernetesVersion: 1.32.0
-# 如果是多master节点，就需要添加这项，指向第一步设定的 vip 的hosts
-controlPlaneEndpoint: "lb.k8s.local:6443"
 networking:
   dnsDomain: cluster.local
   serviceSubnet: 10.96.0.0/12
@@ -56,12 +68,77 @@ networking:
   podSubnet: 10.244.0.0/16
 proxy: {}
 scheduler: {}
-# 在最后添加上下面两部分
 ---
 apiVersion: kubeproxy.config.k8s.io/v1alpha1
+bindAddress: 0.0.0.0
+bindAddressHardFail: false
+clientConnection:
+  acceptContentTypes: ""
+  burst: 0
+  contentType: ""
+  kubeconfig: /var/lib/kube-proxy/kubeconfig.conf
+  qps: 0
+clusterCIDR: ""
+configSyncPeriod: 0s
+conntrack:
+  maxPerCore: null
+  min: null
+  tcpBeLiberal: false
+  tcpCloseWaitTimeout: null
+  tcpEstablishedTimeout: null
+  udpStreamTimeout: 0s
+  udpTimeout: 0s
+detectLocal:
+  bridgeInterface: ""
+  interfaceNamePrefix: ""
+detectLocalMode: ""
+enableProfiling: false
+healthzBindAddress: ""
+hostnameOverride: ""
+iptables:
+  localhostNodePorts: null
+  masqueradeAll: false
+  masqueradeBit: null
+  minSyncPeriod: 0s
+  syncPeriod: 0s
+ipvs:
+  excludeCIDRs: null
+  minSyncPeriod: 0s
+  scheduler: ""
+  strictARP: false
+  syncPeriod: 0s
+  tcpFinTimeout: 0s
+  tcpTimeout: 0s
+  udpTimeout: 0s
 kind: KubeProxyConfiguration
-mode: ipvs
+logging:
+  flushFrequency: 0
+  options:
+    json:
+      infoBufferSize: "0"
+    text:
+      infoBufferSize: "0"
+  verbosity: 0
+metricsBindAddress: ""
+# 修改为 ipvs
+mode: "ipvs"
+nftables:
+  masqueradeAll: false
+  masqueradeBit: null
+  minSyncPeriod: 0s
+  syncPeriod: 0s
+nodePortAddresses: null
+oomScoreAdj: null
+portRange: ""
+showHiddenMetricsForVersion: ""
+winkernel:
+  enableDSR: false
+  forwardHealthCheckVip: false
+  networkName: ""
+  rootHnsEndpointName: ""
+  sourceVip: ""
 ---
+# 在最后添加
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
 cgroupDriver: systemd
