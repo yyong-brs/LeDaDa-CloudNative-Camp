@@ -296,13 +296,16 @@ version.BuildInfo{Version:"v3.17.0-rc.1", GitCommit:"301108edc7ac2a8ba79e4ebf570
       containers:
       - name: busybox-container
         image: registry.cn-shanghai.aliyuncs.com/yydd/busybox:1.28
+        # 持续往 /data/log.txt 输入日志
         command: ["/bin/sh", "-c", "while true; do echo $(date) >> /data/log.txt; sleep 5; done"]
         volumeMounts:
+        # /data 目录 mount 存储 storage
         - mountPath: "/data"
           name: storage
       volumes:
       - name: storage
         persistentVolumeClaim:
+          # pvc 信息
           claimName: longhorn-pvc
     ```
   - 部署 `test-longhorn.yaml`:
