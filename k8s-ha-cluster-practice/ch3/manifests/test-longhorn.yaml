@@ -1,0 +1,32 @@
+# pvc
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: longhorn-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # 指定上面查到的动态 sc
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: longhorn-pod
+  namespace: 
+spec:
+  containers:
+  - name: busybox-container
+    image: registry.cn-shanghai.aliyuncs.com/yydd/busybox:1.28
+    command: ["/bin/sh", "-c", "while true; do echo $(date) >> /data/log.txt; sleep 5; done"]
+    volumeMounts:
+    - mountPath: "/data"
+      name: storage
+  volumes:
+  - name: storage
+    persistentVolumeClaim:
+      claimName: longhorn-pvc
