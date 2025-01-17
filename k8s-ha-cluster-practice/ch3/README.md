@@ -1,10 +1,10 @@
-# K8s 集群中存储组件的安装与配置（NFS/Longhorn/MinIO）
+# 实战部署存储解决方案 - NFS与Longhorn
 
 ## 引言
 
-> 前面我们已经通过 Vagrant 创建了集群所需虚拟机环境，并且通过 kubeadm 部署并验证了基于 Kube-Vip 的高可用集群。接下来我们继续在集群中部署配置存储组件。
+> 在前面的文章中，我们已经通过 Vagrant 创建了集群所需的虚拟机环境，并通过 kubeadm 部署并验证了基于 Kube-Vip 的高可用集群。接下来，我们继续在集群中部署配置存储组件。
 
-在现代云原生应用中，存储是必不可少的组件。尤其是对于生产环境中的 Kubernetes（K8s）集群，可靠的存储解决方案至关重要。本文将介绍如何在K8s 集群中部署并配置文件存储和对象存储解决方案，具体包括 Longhorn、NFS 和 MinIO。所有这些存储组件都将通过 Helm 安装，简化了部署过程，提高了管理效率。
+在现代云原生应用中，存储是必不可少的组件。尤其是对于生产环境中的 Kubernetes（K8s）集群，可靠的存储解决方案至关重要。本文将介绍如何在K8s 集群中部署并配置文件存储和对象存储解决方案，具体包括 Longhorn、NFS。所有这些存储组件都将通过 Helm 安装，简化了部署过程，提高了管理效率。
 
 
 **集群的环境配置可参考前面的文章：**
@@ -15,13 +15,11 @@
 
 ##  存储组件的选择
 
-关于 k8s 存储组件的对比、介绍等可参考往期文章：[七个开源最佳 Kubernetes 存储解决方案](https://mp.weixin.qq.com/s/eWTLcj0qQvHREQAPesgeiQ)、[Longhorn：Kubernetes 原生块存储](https://mp.weixin.qq.com/s/1VkPYAhgRxrOpYzqO19b7w)。接下来将对Longhorn、nfs、minio 展开介绍。
+关于 k8s 存储组件的对比、介绍等可参考往期文章：[七个开源最佳 Kubernetes 存储解决方案](https://mp.weixin.qq.com/s/eWTLcj0qQvHREQAPesgeiQ)、[Longhorn：Kubernetes 原生块存储](https://mp.weixin.qq.com/s/1VkPYAhgRxrOpYzqO19b7w)。接下来将对Longhorn、nfs 展开。
 
 - **文件存储**：Longhorn 和 NFS。
   - **Longhorn**：Longhorn 是一个轻量级、高可用的分布式块存储系统，特别适用于 Kubernetes 环境。它提供易于使用的图形界面、自动快照、备份和恢复等功能，支持动态扩展，并且可以与 Kubernetes 的存储类（StorageClass）集成，满足大多数存储需求。
   - **NFS**：Network File System（NFS）是一个用于文件共享的协议，适合需要多节点共享文件的场景。NFS 在 Kubernetes 中常作为一个共享存储解决方案，适合那些需要跨多个 Pod 或节点共享数据的应用场景。
-- **对象存储**：MinIO。
-  - **MinIO**：**MinIO**是一个兼容 Amazon S3 的高性能对象存储解决方案，广泛用于存储非结构化数据（如图片、视频、大型日志文件等）。MinIO 在 Kubernetes 中作为对象存储组件，能够提供持久化存储和高性能的对象数据访问。
 
 ## Helm 安装工具介绍
 
@@ -55,6 +53,7 @@ version.BuildInfo{Version:"v3.17.0-rc.1", GitCommit:"301108edc7ac2a8ba79e4ebf570
   ```
 
 - **步骤 2：安装 Longhorn**
+
   Longhorn 的 Helm Chart 信息查看 [ArtifactHub](https://artifacthub.io/packages/helm/longhorn/longhorn "Longhorn Chart") 获取。
 
   - 安装 NFSv4客户端
@@ -180,13 +179,13 @@ version.BuildInfo{Version:"v3.17.0-rc.1", GitCommit:"301108edc7ac2a8ba79e4ebf570
       createDefaultDiskLabeledNodes: ~
       # 主机上存储数据的默认路径。默认值为“/var/lib/longhorn/”。
       defaultDataPath: /data/storage/longhorn
-    # 先设置ui 访问通过 nodePort 方式，后续等部署到 ingress 的文章中，再调整为 ingress 访问。
+    # 先设置ui 访问通过 NodePort 方式，后续等部署到 ingress 的文章中，再调整为 ingress 访问。
     service:
       ui:
-        # 设置 ui service 为 nodePort
+        # 设置 ui service 为 NodePort
         type: NodePort
         # 指定端口，可用端口范围 30000 and 32767. （不指定的话会默认创建一个）
-        nodePort: 30080
+        NodePort: 30080
     ```
 
     执行安装：
@@ -207,11 +206,11 @@ version.BuildInfo{Version:"v3.17.0-rc.1", GitCommit:"301108edc7ac2a8ba79e4ebf570
     Visit our documentation at https://longhorn.io/docs/
     ```
     - `longhorn` 本次安装的 Chart 的实例名称(Release Name)。
-    - `longhorn/longhorn` 本次安装的 Chart。
+    - `./longhorn` 本次安装的 Chart 文件目录。
     - `--namespace` 指定目标命名空间。
     - `--create-namespace` 标识当命名空间不存在时，自动创建命名空间。
     - `-f longhorn-values.yaml` 用于指定具体的参数值，详细内容可参考文末的本人Git 仓库。
-    - `--kubeconfig=k8s.conf` 用于指定目标k8s 集群的配置文件，若直接在集群中执行 helm 命令则可以不增加此参数。
+    - `--kubeconfig=C:\Users\brains\Downloads\admin.conf` 用于指定目标k8s 集群的配置文件，若直接在集群中执行 helm 命令则可以不增加此参数。
   - Watch Pod 达到 Running 状态，代表部署成功：
     ```bash
     watch kubectl get pod -n longhorn-system -o wide
@@ -246,7 +245,7 @@ version.BuildInfo{Version:"v3.17.0-rc.1", GitCommit:"301108edc7ac2a8ba79e4ebf570
     ```bash
     kubectl label node node1 node.longhorn.io/create-default-disk=true
     ```
-  - 通过 VIP + nodePort 端口，我们的是 `192.168.33.250:30080` 访问 UI:
+  - 通过 VIP + NodePort 端口，我们的是 `192.168.33.250:30080` 访问 UI:
     ![](images/1.png)
     
   - 我们可以通过开启 master 允许pod 调度，同时打上 longhorn 磁盘标签，查看具体的变化：
@@ -335,48 +334,174 @@ version.BuildInfo{Version:"v3.17.0-rc.1", GitCommit:"301108edc7ac2a8ba79e4ebf570
     ![](images/3.png)
     ![](images/4.png)
 
-## 安装 NFS
-   - 安装步骤：
-     - 安装 NFS 服务：通过 Helm 安装 NFS 的 chart。
-     - 配置 NFS 共享：设置 NFS 共享目录和权限。
-     - 配置 PersistentVolume 和 PersistentVolumeClaim：如何在 K8s 中配置 NFS 存储。
+## 安装 NFS Client Provisioner
 
-## 安装 MinIO
+NFS Client Provisioner 是一个 Kubernetes 存储类实现，它利用 NFS(Network File System) 来动态创建持久卷。
+它的 Helm Chart 信息查看[Github](https://github.com/kubernetes-sigs/nfs-subdir-external-provisioner/tree/master/charts/nfs-subdir-external-provisioner "Nfs Client Provisioner Chart") 获取。
 
-- **步骤 1：添加 MinIO Helm 仓库**
+- **步骤 1：部署 NFS 服务端**
 
-  ```bash
-  helm repo add minio https://charts.min.io
-  helm repo update
-  ```
+  首先，需要准备一个 NFS 服务器来提供存储服务。我们就使用我们 k8s 的 master1 节点。
+  - 安装并配置 NFS 服务器（master1）：
+    ```bash
+    # 在 Ubuntu 上安装 NFS 服务器
+    $ sudo apt update
+    $ sudo apt install nfs-kernel-server
 
-- **步骤 2：安装 MinIO**
+    # 创建共享目录
+    $ sudo mkdir -p /data/nfsdata
+    # 由于我们希望所有客户端都可以访问所有文件，因此我们将分配目录权限。
+    $ sudo chmod -R 777 /data/nfsdata
+    # 配置 NFS 导出,在文件中添加以下行
+    $ cat >> /etc/exports << EOF
+    /data/nfsdata *(rw,sync,no_subtree_check)
+    EOF
+    
+    # 重新加载 NFS 配置
+    $ sudo exportfs -a
 
-  使用 Helm 安装 MinIO：
+    # 启动 NFS 服务
+    $ sudo systemctl start nfs-kernel-server
+    $ sudo systemctl enable nfs-kernel-server
+    ```
+  - 验证 NFS 服务正常运行：
+    ```bash
+    root@master1:~/yy# sudo systemctl start nfs-kernel-server
+    sudo systemctl enable nfs-kernel-server
+    Synchronizing state of nfs-kernel-server.service with SysV service script with /lib/systemd/systemd-sysv-install.
+    Executing: /lib/systemd/systemd-sysv-install enable nfs-kernel-server
+    root@master1:~/yy# systemctl status nfs-kernel-server
+    ● nfs-server.service - NFS server and services
+        Loaded: loaded (/lib/systemd/system/nfs-server.service; enabled; vendor preset: enabled)
+        Drop-In: /run/systemd/generator/nfs-server.service.d
+                └─order-with-mounts.conf
+        Active: active (exited) since Thu 2025-01-16 09:58:18 UTC; 1min 34s ago
+      Main PID: 388706 (code=exited, status=0/SUCCESS)
+            CPU: 6ms
 
-  ```bash
-  helm install minio minio/minio --namespace minio --create-namespace
-  ```
+    Jan 16 09:58:18 master1 systemd[1]: Starting NFS server and services...
+    Jan 16 09:58:18 master1 exportfs[388705]: exportfs: can't open /etc/exports for reading
+    Jan 16 09:58:18 master1 systemd[1]: Finished NFS server and services.
+    root@master1:~/yy# showmount -e localhost
+    Export list for localhost:
+    /data/nfsdata *
+    ```
 
-- **步骤 3：配置 MinIO**
+- **步骤 2：部署 NFS Client Provisioner**
 
-  在安装 MinIO 后，可以设置访问密钥和桶策略，确保数据的安全和可访问性。
+  - helm 添加 仓库：
+    ```bash
+    $ helm repo add nfs-subdir-external-provisioner https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/
+    $ helm repo update
+    ```
+    **注**：访问不了的可以跳过，通过文末的 git 仓库获取 chart 附件。
+  - 安装 Charts:
+    
+    后续所有组件我都基于本地下载 charts 方式进行，方便管理及共享。
+    ```bash
+    $ helm pull nfs-subdir-external-provisioner/nfs-subdir-external-provisioner
+    $ tar zxf nfs-subdir-external-provisioner-4.0.18.tgz
+    $ PS D:\workspace\github\LeDaDa-CloudNative-Camp\k8s-ha-cluster-practice\ch3\helm-charts> helm install nfs-subdir-external-provisioner ./nfs-subdir-external-provisioner --namespace nfs-client-provisioner --create-namespace --set nfs.server=192.168.33.11 --set nfs.path=/data/nfsdata --set image.repository=al-provisioner --namespace nfs-client-provisioner --create-namespace --set nfs.server=192.168.33.11 --set nfs.path=/data/nfsdata --set image.repository=registry.cn-shanghai.aliyuncs.com/yydd/nfs-subdir-external-provisoner --kubeconfig=C:\Users\brains\Downloads\admin.conf
+    NAME: nfs-subdir-external-provisioner
+    LAST DEPLOYED: Thu Jan 16 18:31:20 2025
+    NAMESPACE: nfs-client-provisioner
+    STATUS: deployed
+    REVISION: 1
+    TEST SUITE: None
+    ```
+    - `nfs-subdir-external-provisioner` 本次安装的 Chart 的实例名称(Release Name)。
+    - `./nfs-subdir-external-provisioner` 本次安装的 Chart 文件目录。
+    - `--namespace` 指定目标命名空间。
+    - `--create-namespace` 标识当命名空间不存在时，自动创建命名空间。
+    - `--set nfs.server=192.168.33.11 --set nfs.path=/data/nfsdata` 用于指定上面实际部署的 NFS 服务端信息。
+    - `--set image.repository=registry.cn-shanghai.aliyuncs.com/yydd/nfs-subdir-external-provisoner` 设置镜像仓库为我的阿里云仓库，加速拉取。
+    - `--kubeconfig=C:\Users\brains\Downloads\admin.conf` 用于指定目标k8s 集群的配置文件，若直接在集群中执行 helm 命令则可以不增加此参数。
+  - Watch Pod 达到 Running 状态，代表部署成功：
+    ```bash
+    root@master1:~# watch kubectl get pod -n nfs-client-provisioner -o wide
+    Every 2.0s: kubectl get pod -n nfs-client-provisioner -o wide                                                         master1: Thu Jan 16 10:33:27 2025
 
-- **步骤 4：验证安装**
+    NAME                                               READY   STATUS    RESTARTS   AGE    IP              NODE      NOMINATED NODE   READINESS GATES
+    nfs-subdir-external-provisioner-6fddd668f4-wwmhk   1/1     Running   0          2m6s   10.244.180.14   master2   <none>           <none>
 
-  通过以下命令验证 MinIO 是否成功安装并运行：
+    ```
 
-  ```bash
-  kubectl get pods -n minio
-  ```
+- **步骤 3：验证功能**
+  - 查看 `StorageClass` 清单：
+    ```bash
+    root@master1:~# kubectl get sc
+    NAME                 PROVISIONER                                     RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
+    longhorn (default)   driver.longhorn.io                              Delete          Immediate           true                   44h
+    longhorn-static      driver.longhorn.io                              Delete          Immediate           true                   44h
+    nfs-client           cluster.local/nfs-subdir-external-provisioner   Delete          Immediate           true                   19h                 34m
+    ```
+    可以看到创建了一个 StorageClass `nfs-client`。
+  - 创建 `test-nfs.yaml` ，用于部署一个 Pod，并且创建 动态PVC 挂载（nfs-client）：
+    ```yaml
+    # pvc
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: nfs-pvc
+      namespace: default
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      # 指定上面查到的动态 sc
+      storageClassName: nfs-client
+      resources:
+        requests:
+          storage: 1Gi
+    ---
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: nfs-pod
+      namespace: 
+    spec:
+      containers:
+      - name: busybox-container
+        image: registry.cn-shanghai.aliyuncs.com/yydd/busybox:1.28
+        # 持续往 /data/log.txt 输入日志
+        command: ["/bin/sh", "-c", "while true; do echo $(date) >> /data/log.txt; sleep 5; done"]
+        volumeMounts:
+        # /data 目录 mount 存储 storage
+        - mountPath: "/data"
+          name: storage
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          # pvc 信息
+          claimName: nfs-pvc
+    ```
+  - 部署 `test-nfs.yaml`:
+    ```bash
+    root@master1:~/yy# kubectl apply -f test-nfs.yaml 
+    persistentvolumeclaim/nfs-pvc created
+    pod/nfs-pod created
+    ```
+  - 进入容器查看 /data/log.txt 是否持续在产生内容：
+    ```bash
+    root@master1:~/yy# kubectl exec -it nfs-pod -- tail -f /data/log.txt
+    Fri Jan 17 06:19:55 UTC 2025
+    Fri Jan 17 06:20:00 UTC 2025
+    Fri Jan 17 06:20:05 UTC 2025
+    Fri Jan 17 06:20:10 UTC 2025
+    ```
+    可以看到在 nfs 服务器 /data/nfsdata 目录下已经存在相关文件：
+    ```bash
+    root@master1:/data/nfsdata# ll
+    total 12
+    drwxrwxrwx 3 root   root    4096 Jan 17 06:19 ./
+    drwx--x--x 5 root   root    4096 Jan 16 09:58 ../
+    drwxrwxrwx 2 nobody nogroup 4096 Jan 17 06:19 default-nfs-pvc-pvc-3e80d8a7-e768-4bbc-8cfb-6da13b9ddcfe/
 
-  你可以通过 `kubectl port-forward` 访问 MinIO 控制台：
-
-  ```bash
-  kubectl port-forward service/minio 9000:9000 -n minio
-  ```
-
-  访问 `http://localhost:9000`，使用 MinIO 提供的默认访问密钥进行登录。
+    root@master1:/data/nfsdata/default-nfs-pvc-pvc-3e80d8a7-e768-4bbc-8cfb-6da13b9ddcfe# ll
+    total 12
+    drwxrwxrwx 2 nobody nogroup 4096 Jan 17 06:19 ./
+    drwxrwxrwx 3 root   root    4096 Jan 17 06:19 ../
+    -rw-r--r-- 1 nobody nogroup  667 Jan 17 06:21 log.txt
+    ```
 
 ## helm 扩展命令
 
@@ -388,13 +513,9 @@ helm search repo [repo name]
 
 ```
 
-## 配置和验证
-   - **验证存储组件**
-     - 验证 Longhorn、NFS 和 MinIO 是否正常运行。
-     - 检查 PVC 和 Pod 的状态，确保持久化存储工作正常。
-   - **示例应用**：部署一个简单的应用，验证文件存储和对象存储的使用。
-     - 如何在 Pod 中挂载 NFS 存储。
-     - 如何在应用中访问 MinIO 对象存储。
+
+> 如果你在部署过程中遇到问题，可以参考文末提供的 [github](https://github.com/yyong-brs/LeDaDa-CloudNative-Camp/tree/master/k8s-ha-cluster-practice/ch3 "GitHub 仓库") / [gitee](https://gitee.com/yuedada/LeDaDa-CloudNative-Camp/tree/master/k8s-ha-cluster-practice/ch3 "Gitee 仓库") 仓库中的相关资源。
 
 ## 总结
-本文详细介绍了如何在高可用 Kubernetes 集群中通过 Helm 安装并配置 Longhorn、NFS 和 MinIO 存储组件。使用 Helm 进行部署简化了存储组件的安装和管理，同时确保了 Kubernetes 环境中的数据持久性和可扩展性。未来可以根据需要，扩展更多存储组件，满足不同业务场景的需求。
+
+通过本文的实践，读者可以快速在Kubernetes集群中部署Longhorn和NFS存储组件，为云原生应用提供可靠的存储支持。使用Helm简化了安装和管理过程，使用户能够专注于应用的开发和部署。每个存储组件都有其特定的作用和适用场景，选择合适的存储解决方案可以有效提升应用的性能和可靠性。

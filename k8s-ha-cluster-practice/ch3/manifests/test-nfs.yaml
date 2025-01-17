@@ -1,0 +1,35 @@
+# pvc
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # 指定上面查到的动态 sc
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nfs-pod
+  namespace: 
+spec:
+  containers:
+  - name: busybox-container
+    image: registry.cn-shanghai.aliyuncs.com/yydd/busybox:1.28
+    # 持续往 /data/log.txt 输入日志
+    command: ["/bin/sh", "-c", "while true; do echo $(date) >> /data/log.txt; sleep 5; done"]
+    volumeMounts:
+    # /data 目录 mount 存储 storage
+    - mountPath: "/data"
+      name: storage
+  volumes:
+  - name: storage
+    persistentVolumeClaim:
+      # pvc 信息
+      claimName: nfs-pvc
